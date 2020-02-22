@@ -1,111 +1,172 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 
 void main() => runApp(MyApp());
 
-class MyApp extends StatelessWidget {
-  // This widget is the root of your application.
+class MyApp extends StatefulWidget {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
-      ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
-    );
+  _MyAppState createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  Completer<GoogleMapController> _controller = Completer();
+  Position _lastPosition;
+  DateTime _lastTime;
+  Position _currentPosition;
+  DateTime _currentTime;
+  Timer timer;
+
+  @override
+  void initState() {
+    super.initState();
+    timer = Timer.periodic(Duration(seconds: 1), (Timer t) => _updatePosition());
   }
-}
-
-class MyHomePage extends StatefulWidget {
-  MyHomePage({Key key, this.title}) : super(key: key);
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
 
   @override
-  _MyHomePageState createState() => _MyHomePageState();
-}
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  double _getSpeed() {
+    if(_lastPosition == null || _lastTime == null || _currentPosition == null || _currentTime == null) {
+      return 0;
+    }
+    return _deltaMiles()/_deltaHours();
+  }
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  double _deltaMiles() {
+    return 0;
+  }
+
+  double _deltaHours() {
+    return (convertTimeToSeconds(_currentTime) -  convertTimeToSeconds(_lastTime))/3600;
+  }
+
+  double convertTimeToSeconds(DateTime time) {
+    return (((time.hour * 60 + time.minute) * 60 + time.second) * 1000 + time.millisecond) / 1000;
+  }
+
+  LatLng _getCurrentPosition() {
+    if(_currentPosition == null) {
+      return LatLng(0,0);
+    }
+    return LatLng(_currentPosition.latitude,_currentPosition.longitude);
+  }
+
+  LatLng _getPreviousPosition() {
+    if(_lastPosition == null) {
+      return LatLng(0,0);
+    }
+    return LatLng(_lastPosition.latitude,_lastPosition.longitude);
+  }
+
+  void _updatePosition() {
+    final Geolocator geolocator = Geolocator()..forceAndroidLocationManager;
+
+    geolocator
+        .getCurrentPosition(desiredAccuracy: LocationAccuracy.high)
+        .then((Position position) {
+      setState(() {
+        _lastPosition = _currentPosition;
+        _currentPosition = position;
+        _lastTime = _currentTime;
+        _currentTime = DateTime.now();
+      });
+    }).catchError((e) {
+      print(e);
     });
   }
 
+  void _onMapCreated(GoogleMapController controller) {
+    _controller.complete(controller);
+  }
+
+  String _latString(LatLng position) {
+    return "Latitude: " + position.latitude.toString();
+  }
+
+  String _lngString(LatLng position) {
+    return "Longitude: " + position.longitude.toString();
+  }
+
+  String _timeString(DateTime time) {
+    return "Time: " + (time != null ? time.toString() : "null");
+  }
+
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.display1,
-            ),
-          ],
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(
+          title: Text('Maps Sample App'),
+          backgroundColor: Colors.blue[700],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+        body: Container(
+          color: Colors.blue[100],
+          child: Center(
+            child: Column(
+              children: [
+                Text(
+                    _getSpeed().toString() + " mph",
+                    style: TextStyle(fontSize: 50)
+                ),
+                Container(
+                  width: 400,
+                  height: 400,
+                  child: GoogleMap(
+                    onMapCreated: _onMapCreated,
+                    initialCameraPosition: CameraPosition(
+                      target: _getCurrentPosition(),
+                      zoom: 11.0,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(15),
+                  child: Column(
+                    children: [
+                      Text(
+                        _latString(_getCurrentPosition()),
+                        style: TextStyle(fontSize: 20),
+                      ),
+                      Text(
+                        _lngString(_getCurrentPosition()),
+                        style: TextStyle(fontSize: 20),
+                      ),
+                      Text(
+                        _timeString(_currentTime),
+                        style: TextStyle(fontSize: 20),
+                      )
+                    ]
+                  )
+                ),
+                Padding(
+                    padding: EdgeInsets.all(15),
+                    child: Column(
+                        children: [
+                          Text(
+                            _latString(_getPreviousPosition()),
+                            style: TextStyle(fontSize: 20),
+                          ),
+                          Text(
+                            _lngString(_getPreviousPosition()),
+                            style: TextStyle(fontSize: 20),
+                          ),
+                          Text(
+                            _timeString(_lastTime),
+                            style: TextStyle(fontSize: 20),
+                          )
+                        ]
+                    )
+                )
+              ]
+            )
+          ),
+        )
+      )
     );
   }
 }
